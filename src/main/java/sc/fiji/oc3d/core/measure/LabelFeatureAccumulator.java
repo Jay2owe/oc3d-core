@@ -980,8 +980,22 @@ public final class LabelFeatureAccumulator {
             return Double.NaN;
         }
 
+        /**
+         * Whether the intensity total can carry a centre of mass.
+         *
+         * <p>Requires a finite, <em>strictly positive</em> total. Zero has no
+         * usable denominator, and a negative one is worse than useless: it
+         * flips the sign of every offset from the origin, so the "centre of
+         * mass" of a background-subtracted object can land outside the object,
+         * outside the image, and still be reported as a coordinate. Falling
+         * back to the geometric centroid is the answer that stays inside the
+         * object's own convex hull.
+         *
+         * <p>A negative total is not exotic. Any background-subtracted or
+         * ratiometric 32-bit stack can produce one for a dim object.
+         */
         private boolean hasWeightedCenter() {
-            return hasIntensityValues() && Double.isFinite(intensitySum) && intensitySum != 0.0;
+            return hasIntensityValues() && Double.isFinite(intensitySum) && intensitySum > 0.0;
         }
 
         private void addFeretPoint(double x, double y, double z) {
