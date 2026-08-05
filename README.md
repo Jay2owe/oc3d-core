@@ -6,6 +6,25 @@ Shared engine for the 3D Objects Counter plugin family.
 below is built and tested. What remains is migrating the three plugins onto it —
 see `../../3DObjectsCounterPlus/docs/OC3D_CORE_MIGRATION_PLAN.md`, stages 3-8.
 
+**First consumer adopted (2026-08-05): Volumetric Colocalization**, for
+`ingest`, `ui/ToggleSwitch` and macro tokenising. That migration found the
+chassis was the *weaker* of the two implementations in two places, and both
+were fixed here rather than worked around in the plugin:
+
+- **`ingest`** — an ROI positioned on a slice beyond the reference stack was
+  smeared through the whole volume instead of being refused, so its object
+  measured many times its true size. Four further rules added alongside it
+  (line/polyline/angle/point selections, ROIs outside the reference, degenerate
+  polygons, null entries). All in `RoiLabelImages`, the validating front door;
+  `LabelUtils` stays permissive for internal callers.
+- **`macro`** — `MacroOptions.strictTokens` refuses unclosed brackets, stray
+  closing brackets and line breaks inside values, all of which `tokens`
+  silently mis-parses. Added alongside rather than replacing, so plugins that
+  have not migrated keep their current behaviour until they choose otherwise.
+
+Expect the same on each remaining migration: **diff before deleting, and the
+stricter rule wins.**
+
 | Package | Contents | State |
 |---|---|---|
 | Maven module, BSD-3, `net.imagej:ij` only | — | built — `mvn package` green |
@@ -16,7 +35,7 @@ see `../../3DObjectsCounterPlus/docs/OC3D_CORE_MIGRATION_PLAN.md`, stages 3-8.
 | `io/` | `CsvWriter`, `BatchFileDiscovery`, `WithinBatchScorer`, `ScoreFeatureCatalog`, `SummaryReporter` | built |
 | `macro/` | `MacroOptions`, `MacroFilters` | built |
 | `ui/` | `DialogModel`, `FilterRowsPanel`, `CollapsiblePane`, `DialogDefaults` | built |
-| `ingest/` | `LabelUtils`, `RoiLabelImages` — ROI sets to label images | built |
+| `ingest/` | `LabelUtils`, `RoiLabelImages` — ROI sets to label images | built; strictness rules promoted from Volumetric Colocalization 2026-08-05 |
 | `image/` | `ImageOps` — thread-safe duplication and thresholding | built |
 | `progress/` | `ProgressListener`, `StatusBarProgress` | built |
 | `spi/` | `LabelEngine` | built |
