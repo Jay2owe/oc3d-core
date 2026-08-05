@@ -14,7 +14,7 @@
 
 	<groupId>io.github.jay2owe</groupId>
 	<artifactId>oc3d-core</artifactId>
-	<version>0.1.0</version>
+	<version>0.2.0-SNAPSHOT</version>
 
 	<name>oc3d-core</name>
 	<description>Shared, dependency-free engine for the 3D Objects Counter plugin family: streaming connected-component labelling, single-pass label measurement, and the plumbing duplicated across variants. Built to be shaded into each plugin under a private package name, never shipped to users as a jar.</description>
