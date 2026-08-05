@@ -1,0 +1,38 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Java 21 builds it; the bytecode target stays at 8, set by pom-scijava.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      # The `oracle` profile stays off. It pulls the GPL 3D Objects Counter as a
+      # reference implementation, and this module is BSD-3-Clause: a core that
+      # links GPL infects every plugin that embeds it. The default build must
+      # never have that artifact on any classpath.
+      - name: Build and test
+        run: mvn --batch-mode --no-transfer-progress clean verify
+
+      # This module is the chassis, so it deliberately does ship shared Swing
+      # widgets under `ui`. What it must not do is decide how to talk to a user:
+      # a core throws, and the plugin embedding it presents.
+      - name: Check nothing takes over user interaction
+        run: |
+          if grep -rn --include=*.java \
+               -e 'GenericDialog' -e 'IJ\.error(' -e 'System\.exit(' \
+               src/main/java; then
+            echo "FAIL: a core must throw and let its consumer present."
+            exit 1
+          fi
+          echo "OK: no dialogs, no IJ.error, no System.exit."
