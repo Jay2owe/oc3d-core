@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -51,7 +52,7 @@ public final class LabelUtils {
             throw new IllegalArgumentException(
                     "ROI set path must not be blank (path='" + path + "').");
         }
-        if (path.toLowerCase().endsWith(".roi")) {
+        if (path.toLowerCase(Locale.ROOT).endsWith(".roi")) {
             Roi roi = new RoiDecoder(path).getRoi();
             return roi != null ? new Roi[]{roi} : new Roi[0];
         }
@@ -63,7 +64,10 @@ public final class LabelUtils {
         try {
             ZipEntry entry;
             while ((entry = zis.getNextEntry()) != null) {
-                if (!entry.getName().endsWith(".roi")) continue;
+                // Case-insensitively, and under Locale.ROOT: a set containing
+                // CELL.ROI was silently skipped, and a Turkish default locale
+                // lowercases 'I' to a dotless one that never matches ".roi".
+                if (!entry.getName().toLowerCase(Locale.ROOT).endsWith(".roi")) continue;
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 int n;
                 while ((n = zis.read(buf)) > 0) baos.write(buf, 0, n);
