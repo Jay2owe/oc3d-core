@@ -48,8 +48,10 @@ import sc.fiji.oc3d.core.progress.ProgressListener;
  * <ul>
  *   <li><b>26-connectivity by default</b> - see {@link Connectivity}. Both
  *       implementations being replaced use it.</li>
- *   <li><b>{@code value >= threshold} is foreground</b>, matching
- *       {@code Counter3D.imgArrayModifier()}.</li>
+ *   <li><b>{@code value >= threshold}, and never zero, is foreground</b> - see
+ *       {@link #isForeground}. {@code Counter3D.imgArrayModifier()} zeroes every
+ *       voxel below the threshold and then labels what is left, so zero is
+ *       background whatever the threshold says.</li>
  *   <li><b>z&rarr;y&rarr;x traversal order</b>, matching the measurement pass.
  *       Floating-point summation is not associative, so a different order
  *       perturbs {@code Mean} and {@code StdDev} in their last bits and turns an
@@ -82,6 +84,33 @@ public final class StreamingLabeller {
 
     private StreamingLabeller() {
         // Utility class.
+    }
+
+    /**
+     * Is this voxel foreground?
+     *
+     * <p>{@code value >= threshold}, <b>and never zero</b>. The second half only
+     * bites when the threshold is zero or negative, and it is what
+     * {@code Counter3D} does: {@code imgArrayModifier()} zeroes every voxel below
+     * the threshold and {@code findObjects()} then labels the non-zero remainder,
+     * so a zero voxel is background regardless of what the threshold is set to.
+     *
+     * <p>Without this, a threshold of 0 makes the entire volume one object -
+     * background included - which is how the difference was found: the migration's
+     * equivalence harness runs an "all foreground" configuration at threshold 0,
+     * and on a 16x16x8 fixture the labeller reported a single 2048-voxel object
+     * with {@code Min = 0} against the shipped plugin's 16.
+     *
+     * <p>The mcib3d path this also replaces did <em>not</em> exclude zero, so
+     * 32-bit and multichannel input at threshold 0 previously reported the whole
+     * volume as one object. That is a deliberate correction rather than an
+     * oversight: measuring the background as an object is not a useful answer, and
+     * one engine can only have one rule.
+     *
+     * <p>{@code NaN} fails {@code >=} and is therefore background, on both sides.
+     */
+    static boolean isForeground(float value, double threshold) {
+        return value >= threshold && value != 0.0f;
     }
 
     /** Equivalent to {@link #label(ImagePlus, LabelParameters, ProgressListener)} with no progress. */
@@ -124,7 +153,7 @@ public final class StreamingLabeller {
                 int rowOffset = y * width;
                 for (int x = 0; x < width; x++) {
                     int index = rowOffset + x;
-                    if (!(slice.getf(index) >= threshold)) {
+                    if (!isForeground(slice.getf(index), threshold)) {
                         currentPlane[index] = 0;
                         continue;
                     }
@@ -218,7 +247,7 @@ public final class StreamingLabeller {
                 int rowOffset = y * width;
                 for (int x = 0; x < width; x++) {
                     int index = rowOffset + x;
-                    if (!(slice.getf(index) >= threshold)) {
+                    if (!isForeground(slice.getf(index), threshold)) {
                         currentPlane[index] = 0;
                         continue;
                     }
