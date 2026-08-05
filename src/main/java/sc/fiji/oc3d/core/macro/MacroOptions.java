@@ -149,6 +149,63 @@ public final class MacroOptions {
     }
 
     /**
+     * Tokenises like {@link #tokens(String)}, but refuses a malformed options
+     * string instead of guessing at it.
+     *
+     * <p>Promoted from Volumetric Colocalization, which had these three checks
+     * while the shared version silently accepted all three and mis-parsed:
+     *
+     * <ul>
+     *   <li>an unclosed {@code [}, which swallows the rest of the string into
+     *       one token;
+     *   <li>a stray {@code ]} outside any bracket;
+     *   <li>a line break inside a bracketed value, which a macro cannot
+     *       reproduce on replay.
+     * </ul>
+     *
+     * <p>Offered alongside {@link #tokens(String)} rather than replacing it.
+     * Making the lenient method throw would change how already-written macros
+     * behave in plugins that have not yet migrated, and that is their call to
+     * make, at their own migration, with their own release note. New callers
+     * should prefer this one.
+     *
+     * @throws IllegalArgumentException naming which of the three it was
+     */
+    public static List<String> strictTokens(String options) {
+        List<String> tokens = new ArrayList<String>();
+        if (options == null) return tokens;
+        StringBuilder token = new StringBuilder();
+        int depth = 0;
+        for (int i = 0; i < options.length(); i++) {
+            char c = options.charAt(i);
+            if (depth > 0) {
+                if (c == '\n' || c == '\r') {
+                    throw new IllegalArgumentException(
+                            "Line breaks are not allowed in macro values.");
+                }
+                token.append(c);
+                if (c == '[') depth++;
+                if (c == ']') depth--;
+            } else if (Character.isWhitespace(c)) {
+                addToken(tokens, token);
+            } else {
+                if (c == ']') {
+                    throw new IllegalArgumentException(
+                            "Unexpected closing bracket in macro options.");
+                }
+                if (c == '[') depth = 1;
+                token.append(c);
+            }
+        }
+        if (depth != 0) {
+            throw new IllegalArgumentException(
+                    "Unclosed bracketed macro option value.");
+        }
+        addToken(tokens, token);
+        return tokens;
+    }
+
+    /**
      * Rejects a value that cannot survive a round trip through a bracketed
      * macro option.
      *
