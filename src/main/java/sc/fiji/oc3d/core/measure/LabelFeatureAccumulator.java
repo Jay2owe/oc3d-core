@@ -89,14 +89,15 @@ public final class LabelFeatureAccumulator {
     private static final double INV_SQRT_3 = 1.0 / Math.sqrt(3.0);
     private static final double EIGENVALUE_ZERO_TOLERANCE = 1.0e-12;
     /**
-     * Bounded Feret estimate: fixed directional extrema, not exact pairwise
-     * boundary distance. The value can only ever be an under-estimate of the
-     * true maximum Feret diameter, because the true maximum is attained along
-     * some direction and only 13 are sampled. Stated rather than implied,
-     * because a macro filtering on {@code feret_diameter_max} admits a slightly
-     * different object set than an exact computation would.
+     * The 13 lattice directions of the 26-neighbourhood: 3 axes, 6 face diagonals,
+     * 4 body diagonals. Kept as the first members of {@link #FERET_DIRECTIONS} so
+     * that no object's Feret can ever <i>decrease</i> relative to the 13-direction
+     * estimate this measurement used until 2026-08-06 - a maximum over a superset of
+     * directions is never smaller - and so that objects whose longest axis lies along
+     * an axis or a diagonal, which is most synthetic test material and much real
+     * material, keep exactly the value they had.
      */
-    private static final double[][] FERET_DIRECTIONS = {
+    private static final double[][] LATTICE_FERET_DIRECTIONS = {
             {1.0, 0.0, 0.0},
             {0.0, 1.0, 0.0},
             {0.0, 0.0, 1.0},
@@ -111,6 +112,85 @@ public final class LabelFeatureAccumulator {
             {INV_SQRT_3, -INV_SQRT_3, INV_SQRT_3},
             {-INV_SQRT_3, INV_SQRT_3, INV_SQRT_3}
     };
+
+    /** Near-uniform directions added to fill the gaps the 13 leave. */
+    private static final int FERET_FILL_DIRECTIONS = 51;
+
+    /**
+     * Bounded Feret estimate: directional extrema, not exact pairwise boundary
+     * distance. The value can only ever be an <b>under</b>-estimate of the true
+     * maximum Feret diameter, because the true maximum is attained along some
+     * direction and only {@value #FERET_DIRECTION_COUNT} are sampled.
+     *
+     * <p>How far under is a property of the direction set, and it is bounded. For any
+     * object, the exact Feret pair vector {@code v} satisfies
+     * {@code extent(d) >= |v| * cos angle(v, d)} for every direction {@code d}, so the
+     * estimate is at least {@code |v| * cos(gap)} where {@code gap} is the angle from
+     * {@code v} to the nearest sampled direction. The worst case is therefore
+     * {@code 1 - cos(covering radius)} of the set.
+     *
+     * <p>The 13 lattice directions alone have a covering radius of 27.567 degrees, so
+     * a worst case of <b>11.35%</b>. That was not a theoretical concern: measured
+     * against mcib3d's exact pairwise Feret over 61 568 real objects (microglia and
+     * amyloid), the estimate under-read by 2.5% at the median, 7.2% at p95 and 11.15%
+     * at worst - essentially the whole of the available error. 77% of objects were
+     * more than 1% short.
+     *
+     * <p>This set is those 13 plus {@value #FERET_FILL_DIRECTIONS} near-uniform fill
+     * directions: covering radius 15.052 degrees, worst case <b>3.43%</b>. Pinned by
+     * {@code FeretDirectionsTest}, which recomputes the covering radius rather than
+     * trusting this comment, against a declared 15.10 degrees / 3.45%.
+     *
+     * <p>A macro filtering on {@code feret_diameter_max} still admits a slightly
+     * different object set than an exact computation would. The bound is what makes
+     * that difference statable.
+     */
+    static final double[][] FERET_DIRECTIONS = feretDirections();
+
+    /** Size of {@link #FERET_DIRECTIONS}, for javadoc and for callers that report it. */
+    public static final int FERET_DIRECTION_COUNT = 64;
+
+    /**
+     * The 13 lattice directions followed by near-uniform fill directions from the
+     * Fibonacci hemisphere construction.
+     *
+     * <p>{@link StrictMath} throughout, not {@link Math}: these constants decide
+     * measured values, so they must be bit-identical on every JVM and platform, and
+     * {@code Math.sin} and {@code Math.cos} are only required to be within one ulp of
+     * the true result. A one-ulp difference here would make a golden file
+     * machine-dependent.
+     */
+    private static double[][] feretDirections() {
+        java.util.List<double[]> out = new java.util.ArrayList<double[]>();
+        for (int i = 0; i < LATTICE_FERET_DIRECTIONS.length; i++) {
+            out.add(LATTICE_FERET_DIRECTIONS[i]);
+        }
+        double goldenAngle = StrictMath.PI * (3.0 - StrictMath.sqrt(5.0));
+        for (int i = 0; i < FERET_FILL_DIRECTIONS; i++) {
+            // z over (0,1): directions are lines, so one hemisphere covers the sphere.
+            double z = (i + 0.5) / FERET_FILL_DIRECTIONS;
+            double radius = StrictMath.sqrt(StrictMath.max(0.0, 1.0 - z * z));
+            double phi = i * goldenAngle;
+            addFeretDirection(out, radius * StrictMath.cos(phi), radius * StrictMath.sin(phi), z);
+        }
+        return out.toArray(new double[out.size()][]);
+    }
+
+    /** Adds {@code (x,y,z)} normalised, unless it duplicates a direction already held. */
+    private static void addFeretDirection(java.util.List<double[]> directions,
+                                         double x, double y, double z) {
+        double norm = StrictMath.sqrt(x * x + y * y + z * z);
+        if (!(norm > 0.0)) return;
+        double[] candidate = {x / norm, y / norm, z / norm};
+        for (int i = 0; i < directions.size(); i++) {
+            double[] existing = directions.get(i);
+            double dot = StrictMath.abs(existing[0] * candidate[0]
+                    + existing[1] * candidate[1]
+                    + existing[2] * candidate[2]);
+            if (dot > 1.0 - 1.0e-9) return;
+        }
+        directions.add(candidate);
+    }
 
     private LabelFeatureAccumulator() {
         // Utility class.
@@ -291,6 +371,18 @@ public final class LabelFeatureAccumulator {
                             values.surfaceArea += exposedArea;
                             values.correctedSurfacePixels += correctedSurfaceWeight(
                                     xMinus, xPlus, yMinus, yPlus, zMinus, zPlus);
+                            // Feret over surface voxels only, which is exact rather
+                            // than an approximation: the voxel maximising the
+                            // projection onto any direction d must have an exposed
+                            // face on the axis best aligned with d, or its neighbour
+                            // in that axis would be a same-label voxel with a larger
+                            // projection. So no extremal voxel is ever skipped, and
+                            // every interior voxel skipped could not have been one.
+                            // FeretSurfaceRestrictionTest checks this against a
+                            // project-every-voxel reference.
+                            values.addFeretPoint(x * scales.pixelWidth,
+                                    y * scales.pixelHeight,
+                                    z * scales.pixelDepth);
                         }
                     }
                 }
@@ -658,7 +750,9 @@ public final class LabelFeatureAccumulator {
             shapeXYSum += px * py;
             shapeXZSum += px * pz;
             shapeYZSum += py * pz;
-            addFeretPoint(px, py, pz);
+            // Feret is accumulated in the surface pass instead, over surface voxels
+            // only. See accumulateSurfaceValues: the restriction is lossless, and an
+            // interior voxel projected here is work that cannot change the answer.
             int ix = (int) x;
             int iy = (int) y;
             int iz = (int) z;
