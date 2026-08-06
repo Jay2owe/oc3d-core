@@ -426,6 +426,25 @@ relocated into its own namespace. A user who wants coincidence columns inside
 3D Objects Counter+ downloads nothing extra and never learns that CPC or any
 core exists.
 
+## Citation
+
+This module is archived on Zenodo so that plugins which compile it in can be
+rebuilt from their own archives alone, without depending on GitHub staying
+reachable.
+
+| | DOI |
+| --- | --- |
+| Concept (always resolves to the latest release) | [`10.5281/zenodo.21822701`](https://doi.org/10.5281/zenodo.21822701) |
+| v0.1.0 | [`10.5281/zenodo.21822702`](https://doi.org/10.5281/zenodo.21822702) |
+
+Cite the **version** DOI when reproducibility is the point — the concept DOI
+follows this module forward to releases a given plugin was never built against.
+
+Most users should not cite this directly. It is a build-time library that is
+never shipped as a jar and never appears on an update site; cite the plugin
+that embeds it. CPC 1.5.0 embeds v0.1.0 via `cpc-core` 0.1.0
+([`10.5281/zenodo.21812272`](https://doi.org/10.5281/zenodo.21812272)).
+
 ## Related
 
 - `EQUIVALENCE_HARNESS.md` — the shared before/after testing contract
