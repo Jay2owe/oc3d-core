@@ -60,7 +60,7 @@ public final class ObjectMapBuilder {
     private static final long MIN_DEFAULT_OPTIONAL_MAP_RESERVE_BYTES = 64L * 1024L * 1024L;
     private static final long MAX_DEFAULT_OPTIONAL_MAP_RESERVE_BYTES = 256L * 1024L * 1024L;
     private static final Font LABEL_FONT = new Font("Arial", Font.PLAIN, 10);
-    private static final Color LABEL_COLOR = Color.WHITE;
+    private static final Color LABEL_COLOR = Color.RED;
 
     private ObjectMapBuilder() {}
 
@@ -152,7 +152,7 @@ public final class ObjectMapBuilder {
     public static ImagePlus objectMapInPlace(ImagePlus labelImage, ResultsTable stats, String sourceTitle) {
         if (labelImage == null || labelImage.getStack() == null) return null;
         labelImage.setTitle("Objects map of " + safeTitle(sourceTitle, labelImage));
-        labelImage.setDisplayRange(0, Math.max(1, maxLabel(labelImage)));
+        applyMaskDisplay(labelImage);
         addNumberOverlay(labelImage, stats, "X", "Y", "Z");
         return labelImage;
     }
@@ -200,7 +200,7 @@ public final class ObjectMapBuilder {
             }
 
             ImagePlus map = mapImage(labelImage, out,
-                    "Surfaces map of " + safeTitle(sourceTitle, labelImage), maxLabel);
+                    "Surfaces map of " + safeTitle(sourceTitle, labelImage));
             addNumberOverlay(map, stats, "X", "Y", "Z");
             return map;
         } catch (OutOfMemoryError oom) {
@@ -261,7 +261,7 @@ public final class ObjectMapBuilder {
                 }
             }
 
-            ImagePlus map = mapImage(labelImage, out, title, maxLabel);
+            ImagePlus map = mapImage(labelImage, out, title);
             addNumberOverlay(map, stats, xColumn, yColumn, zColumn);
             return map;
         } catch (OutOfMemoryError oom) {
@@ -290,7 +290,7 @@ public final class ObjectMapBuilder {
                 || labelFromPixel(next.getf(x, y)) != label;
     }
 
-    private static ImagePlus mapImage(ImagePlus reference, ImageStack stack, String title, int maxLabel) {
+    private static ImagePlus mapImage(ImagePlus reference, ImageStack stack, String title) {
         ImagePlus out = new ImagePlus(title, stack);
         out.setDimensions(Math.max(1, reference.getNChannels()),
                 Math.max(1, reference.getNSlices()),
@@ -301,8 +301,17 @@ public final class ObjectMapBuilder {
         if (reference.getCalibration() != null) {
             out.setCalibration(reference.getCalibration().copy());
         }
-        out.setDisplayRange(0, Math.max(1, maxLabel));
+        applyMaskDisplay(out);
         return out;
+    }
+
+    /**
+     * Render zero as background and every positive label as a visible mask.
+     * Numeric label pixels remain untouched, so object identity is preserved
+     * without another stack copy or pixel pass.
+     */
+    private static void applyMaskDisplay(ImagePlus image) {
+        image.setDisplayRange(0, 1);
     }
 
     /**
