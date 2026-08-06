@@ -380,9 +380,14 @@ public final class LabelFeatureAccumulator {
                             // every interior voxel skipped could not have been one.
                             // FeretSurfaceRestrictionTest checks this against a
                             // project-every-voxel reference.
-                            values.addFeretPoint(x * scales.pixelWidth,
-                                    y * scales.pixelHeight,
-                                    z * scales.pixelDepth);
+                            double px = x * scales.pixelWidth;
+                            double py = y * scales.pixelHeight;
+                            double pz = z * scales.pixelDepth;
+                            values.addFeretPoint(px, py, pz);
+                            // Centroid-to-surface distances, for the composite shape
+                            // indices. The centroid is already final here: the voxel
+                            // pass completed before this one started.
+                            values.addSurfaceDistance(px, py, pz);
                         }
                     }
                 }
@@ -700,6 +705,14 @@ public final class LabelFeatureAccumulator {
         private double shapeXZSum;
         private double shapeYZSum;
         private double elongation = Double.NaN;
+        private double flatness = Double.NaN;
+        private double spareness = Double.NaN;
+        private double surfaceDistanceMean = Double.NaN;
+        private double surfaceDistanceStdDev = Double.NaN;
+        /** Running totals over surface voxels, for the two distance statistics. */
+        private double surfaceDistanceSum;
+        private double surfaceDistanceSumSquares;
+        private long surfaceDistanceCount;
         private double feretDiameterMax = Double.NaN;
         private double[] feretMin;
         private double[] feretMax;
@@ -830,7 +843,18 @@ public final class LabelFeatureAccumulator {
 
         private void finish(CalibrationScales scales) {
             calibratedVolume = voxelCount * scales.voxelVolume;
-            elongation = computeElongation();
+            double[] shapeEigenvalues = shapeEigenvalues();
+            elongation = computeElongation(shapeEigenvalues);
+            flatness = computeFlatness(shapeEigenvalues);
+            spareness = computeSpareness(shapeEigenvalues);
+            if (surfaceDistanceCount > 0) {
+                double inverse = 1.0 / (double) surfaceDistanceCount;
+                surfaceDistanceMean = surfaceDistanceSum * inverse;
+                double variance = surfaceDistanceSumSquares * inverse
+                        - surfaceDistanceMean * surfaceDistanceMean;
+                if (variance < 0.0 && variance > -1.0e-9) variance = 0.0;
+                surfaceDistanceStdDev = variance < 0.0 ? Double.NaN : Math.sqrt(variance);
+            }
             feretDiameterMax = computeFeretDiameterMax();
             median = computeMedian();
             // Both stores exist only for the selection above. Releasing the
@@ -996,6 +1020,26 @@ public final class LabelFeatureAccumulator {
             return elongation;
         }
 
+        /** Middle principal axis over the shortest; see {@code computeFlatness}. */
+        public double flatness() {
+            return flatness;
+        }
+
+        /** Object volume over the volume of the ellipsoid with the same moments. */
+        public double spareness() {
+            return spareness;
+        }
+
+        /** Mean distance from the centroid to a surface voxel, in calibrated units. */
+        public double surfaceDistanceMean() {
+            return surfaceDistanceMean;
+        }
+
+        /** Standard deviation of those distances, in calibrated units. */
+        public double surfaceDistanceStdDev() {
+            return surfaceDistanceStdDev;
+        }
+
         /** @see #FERET_DIRECTIONS - a bounded estimate, never an over-estimate */
         public double feretDiameterMax() {
             return feretDiameterMax;
@@ -1120,8 +1164,14 @@ public final class LabelFeatureAccumulator {
             return maxSpan;
         }
 
-        private double computeElongation() {
-            if (voxelCount <= 1) return Double.NaN;
+        /**
+         * Eigenvalues of the calibrated covariance matrix, ascending, or {@code null}
+         * for an object too small to have one. Computed once and shared: elongation,
+         * flatness and spareness are all ratios of the same principal axes, and
+         * computing them separately invited them to disagree.
+         */
+        private double[] shapeEigenvalues() {
+            if (voxelCount <= 1) return null;
             double invCount = 1.0 / (double) voxelCount;
             double cx = shapeXSum * invCount;
             double cy = shapeYSum * invCount;
@@ -1134,10 +1184,74 @@ public final class LabelFeatureAccumulator {
             double cyz = shapeYZSum * invCount - cy * cz;
             double[] eigenvalues = symmetricEigenvalues3x3(cxx, cxy, cxz, cyy, cyz, czz);
             Arrays.sort(eigenvalues);
+            return eigenvalues;
+        }
+
+        private double computeElongation(double[] eigenvalues) {
+            if (eigenvalues == null) return Double.NaN;
             double smallest = zeroIfTiny(eigenvalues[0]);
             double largest = zeroIfTiny(eigenvalues[2]);
             if (largest <= 0.0 || smallest <= 0.0) return Double.NaN;
             return Math.sqrt(largest / smallest);
+        }
+
+        /**
+         * Ratio of the middle principal axis to the shortest, so a needle is 1 and a
+         * pancake is large. Elongation is the same ratio taken over the longest and
+         * shortest axes, which is why both are needed to separate the two shapes -
+         * that separation is exactly what {@code Morph_MP} reports.
+         */
+        private double computeFlatness(double[] eigenvalues) {
+            if (eigenvalues == null) return Double.NaN;
+            double smallest = zeroIfTiny(eigenvalues[0]);
+            double middle = zeroIfTiny(eigenvalues[1]);
+            if (middle <= 0.0 || smallest <= 0.0) return Double.NaN;
+            return Math.sqrt(middle / smallest);
+        }
+
+        /**
+         * Object volume over the volume of the ellipsoid with the same principal
+         * moments: 1 for a solid ellipsoid, below 1 for anything that leaves the
+         * ellipsoid it fits inside partly empty.
+         *
+         * <p>A solid uniform ellipsoid with semi-axis {@code a} has variance
+         * {@code a^2 / 5} along that axis, so {@code a = sqrt(5 * lambda)}, and its
+         * volume is {@code 4/3 * pi * a * b * c}.
+         *
+         * <p><b>This is analytic, and mcib3d's {@code ELL_SPARENESS} is not.</b> That
+         * implementation rasterises a fitted ellipsoid with
+         * {@code ObjectCreator3D.createEllipsoidAxesUnit} and divides voxel counts -
+         * read from the shipped bytecode, not assumed - so it carries a discretisation
+         * error that depends on the object's size and orientation. The two agree in the
+         * limit and differ on small objects, which is a difference of method, not a
+         * defect, and it is why {@code Morph_PB} is expected to move when this replaces
+         * the mcib3d call.
+         */
+        private double computeSpareness(double[] eigenvalues) {
+            if (eigenvalues == null || !(calibratedVolume > 0.0)) return Double.NaN;
+            double smallest = zeroIfTiny(eigenvalues[0]);
+            double middle = zeroIfTiny(eigenvalues[1]);
+            double largest = zeroIfTiny(eigenvalues[2]);
+            if (smallest <= 0.0 || middle <= 0.0 || largest <= 0.0) return Double.NaN;
+            double semiA = Math.sqrt(5.0 * largest);
+            double semiB = Math.sqrt(5.0 * middle);
+            double semiC = Math.sqrt(5.0 * smallest);
+            double ellipsoidVolume = 4.0 / 3.0 * Math.PI * semiA * semiB * semiC;
+            if (!(ellipsoidVolume > 0.0)) return Double.NaN;
+            return calibratedVolume / ellipsoidVolume;
+        }
+
+        /** Distance from the object's centroid to one of its surface voxels. */
+        private void addSurfaceDistance(double px, double py, double pz) {
+            if (voxelCount <= 0) return;
+            double invCount = 1.0 / (double) voxelCount;
+            double dx = px - shapeXSum * invCount;
+            double dy = py - shapeYSum * invCount;
+            double dz = pz - shapeZSum * invCount;
+            double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            surfaceDistanceSum += distance;
+            surfaceDistanceSumSquares += distance * distance;
+            surfaceDistanceCount++;
         }
     }
 
