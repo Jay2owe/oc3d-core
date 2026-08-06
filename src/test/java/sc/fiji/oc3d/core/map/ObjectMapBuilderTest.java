@@ -9,6 +9,8 @@ import ij.process.ShortProcessor;
 
 import org.junit.Test;
 
+import java.awt.Color;
+
 import sc.fiji.oc3d.core.testing.Fixtures;
 
 import static org.junit.Assert.assertEquals;
@@ -40,6 +42,27 @@ public class ObjectMapBuilderTest {
 
         assertSame("no second full-volume allocation", labels, map);
         assertEquals("Objects map of source", map.getTitle());
+    }
+
+    @Test
+    public void everyPositiveLabelRendersAsAVisibleMaskShape() {
+        ImagePlus labels = Fixtures.blank("source", 5, 5, 3, 32);
+        for (int slice = 1; slice <= 3; slice++) {
+            labels.getStack().getProcessor(slice).setf(2, 2, 1);
+        }
+        labels.getStack().getProcessor(1).setf(0, 0, 1000);
+
+        ImagePlus map = ObjectMapBuilder.objectMapInPlace(labels, null, "source");
+
+        for (int slice = 1; slice <= 3; slice++) {
+            map.setSlice(slice);
+            int renderedRgb = map.getBufferedImage().getRGB(2, 2) & 0x00ffffff;
+            assertTrue("label 1 must not render as black on occupied slice " + slice,
+                    renderedRgb != 0);
+            assertEquals("display changes must preserve the numeric label image",
+                    1.0, map.getProcessor().getf(2, 2), 0.0);
+        }
+        assertEquals(1000.0, map.getStack().getProcessor(1).getf(0, 0), 0.0);
     }
 
     @Test
@@ -161,6 +184,7 @@ public class ObjectMapBuilderTest {
 
         assertNotNull(map.getOverlay());
         assertEquals(2, map.getOverlay().size());
+        assertEquals(Color.RED, map.getOverlay().get(0).getStrokeColor());
         assertNull("nothing was skipped", ObjectMapBuilder.overlaySkippedReason(map));
     }
 
