@@ -436,6 +436,7 @@ reachable.
 | --- | --- |
 | Concept (always resolves to the latest release) | [`10.5281/zenodo.21822701`](https://doi.org/10.5281/zenodo.21822701) |
 | v0.1.0 | [`10.5281/zenodo.21822702`](https://doi.org/10.5281/zenodo.21822702) |
+| v0.2.0 | [`10.5281/zenodo.21823678`](https://doi.org/10.5281/zenodo.21823678) |
 
 Cite the **version** DOI when reproducibility is the point — the concept DOI
 follows this module forward to releases a given plugin was never built against.
