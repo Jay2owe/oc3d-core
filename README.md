@@ -31,7 +31,7 @@ stricter rule wins.**
 | `api/` | `MorphPredicate`, `OC3DParameters`, `OC3DResult`, `WarningSink` | built |
 | `label/` | `Connectivity`, `LabelParameters`, `LabelResult`, `LabelImages`, `StreamingLabeller`, `StreamingLabelEngine`, `LabelRenumberer` | built |
 | `measure/` | `LabelFeatureAccumulator` — the single measurement path | built |
-| `map/` | `ObjectMapBuilder` — objects, surfaces, centroids, centres of mass | built |
+| `map/` | `ObjectMapBuilder` — objects, surfaces, centroids, centres of mass, with every positive label visibly rendered | built |
 | `io/` | `CsvWriter`, `BatchFileDiscovery`, `WithinBatchScorer`, `ScoreFeatureCatalog`, `SummaryReporter` | built |
 | `macro/` | `MacroOptions`, `MacroFilters` | built |
 | `ui/` | `DialogModel`, `FilterRowsPanel`, `CollapsiblePane`, `DialogDefaults` | built |
