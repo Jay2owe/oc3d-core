@@ -335,9 +335,10 @@ if the family outgrows it.
 
 ## Licence outcome
 
-`oc3d-core` itself is **BSD-3-Clause** and links nothing but `net.imagej:ij`
-(ImageJ 1.x, public domain). But the consumers do **not** all end up in the same
-place, because the refactor removes mcib3d — not TrackMate.
+`oc3d-core` itself is **BSD-3-Clause** — see `LICENSE`, with attribution in
+`NOTICE` — and links nothing but `net.imagej:ij` (ImageJ 1.x, public domain).
+But the consumers do **not** all end up in the same place, because the refactor
+removes mcib3d — not TrackMate.
 
 | Plugin | GPL deps after migration | Distributed artifact |
 |---|---|---|
