@@ -2,3 +2,6 @@ target/
 
 # Working documents are not part of the public plugin repository.
 /docs/
+
+# Internal working documents are not part of the public repository.
+/EQUIVALENCE_HARNESS.md
