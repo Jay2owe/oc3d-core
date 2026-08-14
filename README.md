@@ -1,5 +1,7 @@
 # oc3d-core
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21822701.svg)](https://doi.org/10.5281/zenodo.21822701)
+
 Shared engine for the 3D Objects Counter plugin family.
 
 **Status (2026-08-04): the chassis is complete.** Every package in the layout
@@ -438,6 +440,10 @@ reachable.
 | Concept (always resolves to the latest release) | [`10.5281/zenodo.21822701`](https://doi.org/10.5281/zenodo.21822701) |
 | v0.1.0 | [`10.5281/zenodo.21822702`](https://doi.org/10.5281/zenodo.21822702) |
 | v0.2.0 | [`10.5281/zenodo.21823678`](https://doi.org/10.5281/zenodo.21823678) |
+
+> Malcolm, J. (2026). *oc3d-core: Shared engine for the 3D Objects Counter
+> plugin family* (Version 0.2.0) [Computer software]. Zenodo.
+> https://doi.org/10.5281/zenodo.21823678
 
 Cite the **version** DOI when reproducibility is the point — the concept DOI
 follows this module forward to releases a given plugin was never built against.

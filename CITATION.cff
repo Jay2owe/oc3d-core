@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use oc3d-core in academic work, please cite the software release you used."
+type: software
+title: "oc3d-core: Shared engine for the 3D Objects Counter plugin family"
+abstract: "A headless shared engine for label and ROI ingestion, connected-component labelling, object measurement, macro parsing and batch plumbing, packaged for embedding in ImageJ/Fiji plugins."
+authors:
+  - family-names: "Malcolm"
+    given-names: "Jamie"
+    orcid: "https://orcid.org/0009-0008-3862-2776"
+repository-code: "https://github.com/Jay2owe/oc3d-core"
+url: "https://github.com/Jay2owe/oc3d-core"
+doi: "10.5281/zenodo.21823678"
+keywords:
+  - "bioimage analysis"
+  - "ImageJ"
+  - "3D object measurement"
+  - "label images"
+license: "BSD-3-Clause"
+version: "0.2.0"
+date-released: "2026-08-06"
