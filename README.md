@@ -4,6 +4,10 @@
 
 Shared engine for the 3D Objects Counter plugin family.
 
+**Release (2026-09-30): 0.2.1.** `CentroidScan` no longer boxes each voxel's
+label: 1.4-1.6x faster end to end in Object Colocalization Suite's benchmarks,
+every output identical bit for bit to 0.2.0. See `CHANGELOG.md`.
+
 **Status (2026-08-04): the chassis is complete.** Every package in the layout
 below is built and tested. What remains is migrating the three plugins onto it —
 see `../../3DObjectsCounterPlus/docs/OC3D_CORE_MIGRATION_PLAN.md`, stages 3-8.
