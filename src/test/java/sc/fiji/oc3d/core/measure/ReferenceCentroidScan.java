@@ -13,7 +13,10 @@ import java.util.Map;
 import sc.fiji.oc3d.core.label.LabelImages;
 
 /**
- * Per-label centroids and voxel counts, and nothing else.
+ * The 0.2.0 {@code CentroidScan}, kept verbatim (renamed) as the reference
+ * {@link CentroidScanEquivalenceTest} compares against. Not used by the core.
+ *
+ * <p>Per-label centroids and voxel counts, and nothing else.
  *
  * <p>{@link LabelFeatureAccumulator} answers the same question, plus surface
  * area, sphericity, elongation, median intensity and a thirteen-direction Feret
@@ -33,9 +36,9 @@ import sc.fiji.oc3d.core.label.LabelImages;
  * this at all. {@link #from(LabelFeatureAccumulator.Result, boolean)} reuses
  * that scan and touches no pixels.
  */
-public final class CentroidScan {
+final class ReferenceCentroidScan {
 
-    private CentroidScan() {
+    private ReferenceCentroidScan() {
         // Utility class.
     }
 
@@ -166,59 +169,22 @@ public final class CentroidScan {
             }
         }
 
-        // Each voxel is added to its label's running totals in the same order
-        // as ever. What changed is how the totals are found: labels below
-        // DENSE_LABELS index a plain array, larger ones a map, and the last
-        // label's totals are kept at hand because neighbouring voxels usually
-        // share a label. An ordinary in-memory stack's byte, short or float
-        // array is read directly - exactly what getProcessor(slice).getf reads -
-        // instead of building a processor per slice.
-        Sums[] dense = null;
-        Map<Integer, Sums> large = new LinkedHashMap<Integer, Sums>();
-        boolean plainStack = labelStack.getClass() == ImageStack.class && !labelStack.isVirtual();
-        Sums sums = null;
-        int sumsLabel = 0;
+        Map<Integer, Sums> sumsByLabel = new LinkedHashMap<Integer, Sums>();
         for (int z = 0; z < depth; z++) {
-            Object pixels = plainStack ? labelStack.getPixels(z + 1) : null;
-            short[] shorts = pixels instanceof short[] ? (short[]) pixels : null;
-            byte[] bytes = pixels instanceof byte[] ? (byte[]) pixels : null;
-            float[] floats = pixels instanceof float[] ? (float[]) pixels : null;
-            ImageProcessor labelProcessor = shorts == null && bytes == null && floats == null
-                    ? labelStack.getProcessor(z + 1) : null;
+            ImageProcessor labelProcessor = labelStack.getProcessor(z + 1);
             ImageProcessor intensityProcessor = intensityStack == null
                     ? null : intensityStack.getProcessor(z + 1);
             for (int y = 0; y < height; y++) {
                 int offset = y * width;
                 for (int x = 0; x < width; x++) {
                     int index = offset + x;
-                    int label;
-                    if (shorts != null) {
-                        label = shorts[index] & 0xffff;
-                    } else if (bytes != null) {
-                        label = bytes[index] & 0xff;
-                    } else if (floats != null) {
-                        label = LabelImages.labelFromPixel(floats[index]);
-                    } else {
-                        label = LabelImages.labelFromPixel(labelProcessor.getf(index));
-                    }
+                    int label = LabelImages.labelFromPixel(labelProcessor.getf(index));
                     if (label <= 0) continue;
-                    if (sums == null || label != sumsLabel) {
-                        if (label < DENSE_LABELS) {
-                            if (dense == null) dense = new Sums[DENSE_LABELS];
-                            sums = dense[label];
-                            if (sums == null) {
-                                sums = new Sums();
-                                dense[label] = sums;
-                            }
-                        } else {
-                            Integer key = Integer.valueOf(label);
-                            sums = large.get(key);
-                            if (sums == null) {
-                                sums = new Sums();
-                                large.put(key, sums);
-                            }
-                        }
-                        sumsLabel = label;
+                    Integer key = Integer.valueOf(label);
+                    Sums sums = sumsByLabel.get(key);
+                    if (sums == null) {
+                        sums = new Sums();
+                        sumsByLabel.put(key, sums);
                     }
                     sums.addVoxel(x, y, z);
                     if (intensityProcessor != null) {
@@ -229,22 +195,14 @@ public final class CentroidScan {
             }
         }
 
-        List<Centroid> centroids = new ArrayList<Centroid>();
-        if (dense != null) {
-            for (int label = 1; label < dense.length; label++) {
-                if (dense[label] != null) centroids.add(dense[label].toCentroid(label));
-            }
-        }
-        List<Integer> labels = new ArrayList<Integer>(large.keySet());
+        List<Integer> labels = new ArrayList<Integer>(sumsByLabel.keySet());
         Collections.sort(labels);
+        List<Centroid> centroids = new ArrayList<Centroid>(labels.size());
         for (Integer label : labels) {
-            centroids.add(large.get(label).toCentroid(label.intValue()));
+            centroids.add(sumsByLabel.get(label).toCentroid(label.intValue()));
         }
         return new Result(centroids);
     }
-
-    /** Labels below this find their totals in an array; larger ones in a map. */
-    private static final int DENSE_LABELS = 1 << 16;
 
     /**
      * Reuses a measurement pass that has already happened.
